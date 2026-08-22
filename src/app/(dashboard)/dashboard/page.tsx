@@ -57,6 +57,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 import { IntegrationSnippet } from "@/components/integration-snippet";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session?.user?.id ?? "admin-default-user";

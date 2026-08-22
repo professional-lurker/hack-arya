@@ -13,6 +13,8 @@ const AUDIT_LABELS: Record<string, string> = {
   CONFIG_CHANGED: "Config Changed", USER_SUSPENDED: "User Suspended",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPage() {
   const session = await auth();
   if (session && !["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) redirect("/dashboard");
