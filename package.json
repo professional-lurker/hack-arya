@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
-    "build": "next build",
     "start": "next start -p 3005",
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
@@ -13,7 +12,12 @@
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
-    "setup": "npm run db:generate && npm run db:push && npm run db:seed"
+    "setup": "npm run db:generate && npm run db:push && npm run db:seed",
+    "preinstall": "echo Running preinstall checks",
+    "postinstall": "prisma generate",
+    "prebuild": "prisma generate",
+    "build": "prisma generate && next build",
+    "postbuild": "echo Build complete"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"          # change to "dist" or "build" if not using Next.js
+
+[build.environment]
+  NODE_VERSION = "20"
+  PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"   # remove if not using Next.js
