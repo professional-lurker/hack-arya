@@ -1,0 +1,359 @@
+// AI Sandbox — SQLite-compatible Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String?
+  passwordHash     String?
+  role             String    @default("USER")       // USER | ADMIN | SUPER_ADMIN
+  emailVerified    DateTime?
+  isActive         Boolean   @default(true)
+  isSuspended      Boolean   @default(false)
+  suspendedReason  String?
+  maxActiveKeys    Int       @default(5)
+  maxDailyKeys     Int       @default(10)
+  dailyKeysCreated Int       @default(0)
+  dailyKeysResetAt DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  projects    Project[]
+  sandboxKeys SandboxKey[]
+  apiRequests ApiRequest[]
+  auditLogs   AuditLog[]
+  accounts    Account[]
+  sessions    Session[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// NextAuth adapter tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// PROJECTS & TEST SESSIONS
+// ============================================================
+
+model Project {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testSessions TestSession[]
+  sandboxKeys  SandboxKey[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model TestSession {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sandboxKeys SandboxKey[]
+  apiRequests ApiRequest[]
+
+  @@index([projectId])
+  @@map("test_sessions")
+}
+
+// ============================================================
+// PROVIDERS & MODELS
+// ============================================================
+
+model Provider {
+  id                 String    @id @default(cuid())
+  name               String    @unique  // gemini | openai | anthropic | mock
+  displayName        String
+  description        String?
+  isEnabled          Boolean   @default(false)
+  isHealthy          Boolean   @default(true)
+  lastHealthCheck    DateTime?
+  healthStatus       String    @default("UNKNOWN")  // OPERATIONAL | DEGRADED | OUTAGE | UNKNOWN
+  maxDailyBudgetUsd  Float?
+  currentDailySpend  Float     @default(0)
+  dailySpendResetAt  DateTime  @default(now())
+  maxHourlyBudgetUsd Float?
+  currentHourlySpend Float     @default(0)
+  hourlySpendResetAt DateTime  @default(now())
+  defaultMaxRequests Int       @default(25)
+  defaultMaxTokens   Int       @default(20000)
+  defaultMaxLifetime Int       @default(3600)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  models         ProviderModel[]
+  credentials    ProviderCredential[]
+  sandboxKeys    SandboxKey[]
+  apiRequests    ApiRequest[]
+  pricingConfigs PricingConfig[]
+  systemHealth   SystemHealth[]
+
+  @@map("providers")
+}
+
+model ProviderModel {
+  id               String   @id @default(cuid())
+  providerId       String
+  modelId          String
+  displayName      String
+  description      String?
+  isEnabled        Boolean  @default(true)
+  maxInputTokens   Int?
+  maxOutputTokens  Int?
+  supportsStreaming Boolean  @default(true)
+  supportsVision   Boolean  @default(false)
+  tier             String   @default("standard")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  provider    Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  sandboxKeys SandboxKey[]
+  apiRequests ApiRequest[]
+
+  @@unique([providerId, modelId])
+  @@index([providerId])
+  @@map("provider_models")
+}
+
+model ProviderCredential {
+  id              String   @id @default(cuid())
+  providerId      String
+  encryptedApiKey String
+  keyHint         String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  rotatedAt       DateTime?
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@map("provider_credentials")
+}
+
+// ============================================================
+// SANDBOX KEYS
+// ============================================================
+
+model SandboxKey {
+  id              String   @id @default(cuid())
+  userId          String
+  projectId       String?
+  testSessionId   String?
+  providerId      String
+  providerModelId String?
+
+  keyPrefix       String
+  keyHash         String   @unique
+  name            String?
+  status          String   @default("ACTIVE") // CREATED | ACTIVE | EXPIRED | EXHAUSTED | REVOKED
+
+  maxRequests     Int      @default(25)
+  maxTokens       Int      @default(20000)
+  maxRatePer60s   Int      @default(10)
+  requestsUsed    Int      @default(0)
+  tokensUsed      Int      @default(0)
+
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  revokedAt       DateTime?
+  exhaustedAt     DateTime?
+
+  // Comma-separated model IDs (SQLite can't do String[])
+  allowedModels   String   @default("")
+  // JSON string of simulation flags
+  simulationFlags String   @default("{}")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?       @relation(fields: [projectId], references: [id])
+  testSession   TestSession?   @relation(fields: [testSessionId], references: [id])
+  provider      Provider       @relation(fields: [providerId], references: [id])
+  providerModel ProviderModel? @relation(fields: [providerModelId], references: [id])
+  apiRequests   ApiRequest[]
+
+  @@index([keyHash])
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("sandbox_keys")
+}
+
+// ============================================================
+// API REQUESTS
+// ============================================================
+
+model ApiRequest {
+  id               String   @id @default(cuid())
+  requestId        String   @unique @default(cuid())
+  userId           String?
+  sandboxKeyId     String?
+  providerId       String?
+  providerModelId  String?
+  testSessionId    String?
+
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  latencyMs        Int?
+
+  status           String   // SUCCESS | ERROR | TIMEOUT | RATE_LIMITED | QUOTA_EXCEEDED | AUTH_FAILED | PROVIDER_ERROR
+  httpStatusCode   Int?
+  isStreaming      Boolean  @default(false)
+
+  inputTokens      Int?
+  outputTokens     Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?
+
+  modelId          String?
+  requestSizeBytes Int?
+  responseSizeBytes Int?
+
+  promptPreview    String?
+  responsePreview  String?
+
+  errorType        String?
+  errorMessage     String?
+
+  ipHash           String?
+  userAgent        String?
+
+  wasSimulated     Boolean  @default(false)
+  simulationType   String?
+
+  user          User?          @relation(fields: [userId], references: [id])
+  sandboxKey    SandboxKey?    @relation(fields: [sandboxKeyId], references: [id])
+  provider      Provider?      @relation(fields: [providerId], references: [id])
+  providerModel ProviderModel? @relation(fields: [providerModelId], references: [id])
+  testSession   TestSession?   @relation(fields: [testSessionId], references: [id])
+
+  @@index([userId])
+  @@index([sandboxKeyId])
+  @@index([startedAt])
+  @@index([status])
+  @@map("api_requests")
+}
+
+// ============================================================
+// PRICING CONFIG
+// ============================================================
+
+model PricingConfig {
+  id               String   @id @default(cuid())
+  providerId       String
+  modelId          String?
+  inputPricePer1M  Float
+  outputPricePer1M Float
+  effectiveFrom    DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@map("pricing_configs")
+}
+
+// ============================================================
+// AUDIT LOGS
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String   // KEY_GENERATED | KEY_REVOKED | USER_CREATED | etc.
+  targetType String?
+  targetId   String?
+  metadata   String?  // JSON string
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// SYSTEM HEALTH
+// ============================================================
+
+model SystemHealth {
+  id           String   @id @default(cuid())
+  providerId   String
+  status       String   // OPERATIONAL | DEGRADED | OUTAGE | UNKNOWN
+  latencyMs    Int?
+  checkedAt    DateTime @default(now())
+  errorMessage String?
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([checkedAt])
+  @@map("system_health")
+}
