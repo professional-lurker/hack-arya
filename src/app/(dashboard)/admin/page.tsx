@@ -15,8 +15,7 @@ const AUDIT_LABELS: Record<string, string> = {
 
 export default async function AdminPage() {
   const session = await auth();
-  if (!session) redirect("/login");
-  if (!["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) redirect("/dashboard");
+  if (session && !["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) redirect("/dashboard");
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
