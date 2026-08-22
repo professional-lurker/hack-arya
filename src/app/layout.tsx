@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { ClientToaster } from "@/components/ui/client-toaster";
+
 
 export const metadata: Metadata = {
   title: "AI Sandbox — Test AI APIs Safely",
@@ -17,7 +18,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="font-sans antialiased">
         {children}
-        <Toaster />
+        <ClientToaster />
       </body>
     </html>
   );
